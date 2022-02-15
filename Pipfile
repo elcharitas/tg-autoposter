@@ -7,6 +7,8 @@ name = "pypi"
 telethon = "*"
 bs4 = "*"
 requests = "*"
+python-dotenv = "*"
+pyarmor = "*"
 
 [dev-packages]
 

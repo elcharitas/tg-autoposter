@@ -1,1 +1,6 @@
 hi
+hello:1
+How are you
+What are you doing
+Its fine:4
+Im good:3
