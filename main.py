@@ -5,7 +5,7 @@ STATES = {
   "paused": False,
   "code": False,
   "codeText": "",
-  "delay": "1",
+  "delay": "3",
   "messages": "Logs for " + str(date.today())
 }
 
