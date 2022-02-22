@@ -8,7 +8,7 @@ telethon = "*"
 bs4 = "*"
 requests = "*"
 python-dotenv = "*"
-pyarmor = "*"
+pyqt5 = "*"
 
 [dev-packages]
 

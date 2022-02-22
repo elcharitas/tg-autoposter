@@ -1,122 +1,185 @@
-import sys, pip
-from typing import List
-from pkgutil import iter_modules
+from threading import Thread
+from PyQt5.QtCore import Qt, QEvent, QEventLoop
 
-# platform specific imports
-from os import getenv as env, path
-from asyncio import get_event_loop
-from random import randint
+# import pyqt5 widgets
+from PyQt5.QtWidgets import (
+  QApplication,
+  QMainWindow,
+  QMessageBox,
+  QLabel,
+  QHBoxLayout,
+  QPushButton,
+  QLineEdit,
+  QScrollArea,
+  QVBoxLayout,
+  QGridLayout,
+  QWidget,
+)
 
-# a set of installed modules
-modules = {x[1] for x in iter_modules()}
-dependency = ["telethon", "bs4", "requests", "python-dotenv"]
+from functions import start_app
+class ChatUI(QApplication):
+  def __init__(self, setState, getState):
+    # initialize the application
+    super(QApplication, self).__init__([])
 
-def install_dep(package):
-  if hasattr(pip, 'main'):
-    pip.main(['install', package])
-  else:
-    pip._internal.main(['install', package])
+    # set title and icon of gui
+    self.setApplicationName('Telegram Autoposter by Gifford - giffordcostly@gmail.com')
 
-def launch_app():
-  # telethon specific imports
-  from telethon import TelegramClient as Client
-  from telethon.events import NewMessage
-  from telethon.tl.functions.messages import ImportChatInviteRequest
+    # change styles to fusion
+    self.setStyle('Fusion')
 
-  # logic enhancing deps
-  import requests
-  from dotenv import load_dotenv
+    # create a window and load it
+    self.window = self.Window(setState, getState)
 
-  # load the env in example.env
-  load_dotenv("./example.env")
+    # start the script
+    script = Thread(target=start_app, args=[setState, getState])
+    script.start()
 
-  def getenv(key, default = "") -> str:
-    return env(key) or default
-  
-  def get_message(curMessage: str)-> List[str]: 
-    msgList = curMessage.split(":")
-    msgRef = msgList[-1] if len(msgList) > 1 else ""
-    return [curMessage.replace(":" + msgRef, ""), msgRef.strip()]
-
-  def get_ref(msg: str):
-    for message in messages:
-      message = get_message(msg)
-      if message[0].lower().strip() == msg.lower().strip():
-        print(message)
-        return message[1]
-
-  def get_reply(ref: str) -> List[str]:
-    return messages[int(ref) - 1] if ref else get_rnd_msg()
-
-  def get_rnd_msg():
-    rnd = randint(0, len(messages))
-    message = get_message(messages[rnd - 1])
-    return message[0]
-
-  # start sending messages on behalf of accounts
-  async def start(phoneNumber: str) -> None:
-    client = Client(
-      SESSION_PATH + phoneNumber,
-      API_ID,
-      API_HASH
-    )
-    await client.start(phoneNumber)
-    print(phoneNumber + " has been logged in!")
-
-    with open(GROUPS_PATH) as groups:
-      while group := groups.readline().strip():
-        site = requests.get(group)
-        try:
-          await client(ImportChatInviteRequest(site.url.split("/")[-1]))
-          # send first messsage
-          group = await client.get_entity(site.url)
-          greetings = open(GREETING_PATH).readlines()
-          greeting = greetings[randint(0, len(greetings)) - 1]
-          await client.send_message(group, greeting)
-        except: pass
+  def show_popup(self, message='It\'s working!'):
+    """Displays a popup message.
+    Args:
+        message (str, optional): The message to display. Defaults to 'It\'s working!'.
     
-    # profile = await client.get_me()
-    @client.on(NewMessage())
-    async def send_msg(message) -> None:
-      def reply(msg, rnd = randint(0, 1)):
-        return (message.reply(msg) if rnd == 0 else client.send_message(message.chat_id, msg))
-      # read all numbers and start task
-      print(phoneNumber + " has started typing...")
-      mRef = get_ref(message.raw_text)
-      msg = get_reply(mRef).capitalize()
-      try:
-        if path.exists(msg):
-          await client.send_file(message.chat_id, msg)
-        elif mRef: await reply(msg)
-        else: await reply(msg, 1)
-      except: pass
+    Example:
+        app.show_popup(message='Some Message')
+    """
+    messageBox = QMessageBox()
+    messageBox.setText(message)
+    messageBox.exec_()
 
-  # env variables
-  API_ID = getenv("API_ID")
-  API_HASH = getenv("API_HASH")
+  def refresh(self):
+    """Refreshes the browser by revisiting the current link
+    """
+    self.window.engine.reload()
+  class Window(QMainWindow):
+    code = ""
 
-  # config paths
-  GROUPS_PATH = "./groups.txt"
-  NUMBERS_PATH = "./numbers.txt"
-  MESSAGES_PATH = "./messages.txt"
-  GREETING_PATH = "./greetings.txt"
-  SESSION_PATH = "sessions/"
+    states = {}
 
-  # create the loop handle
-  async_jobs = get_event_loop()
+    def __init__(self, setState, getState):
+      # create a connection
+      super(QMainWindow, self).__init__()
+      self.app = ChatUI.instance()
 
-  # load the messages
-  messages = open(MESSAGES_PATH).readlines()
 
-  # read all numbers and start task
-  with open(NUMBERS_PATH) as numbers:
-    while number := numbers.readline().strip():
-      async_jobs.create_task(start(number))
+      def on_click():
+        if self.button.text() != "Pause":
+          setStatus("Restarting the Script...")
+          text = "Pause"
+          setState("paused", False)
+          codebox.setDisabled(True)
+        else:
+          setStatus("Pausing the Script...")
+          setState("paused", True)
+          text = "Start"
 
-  async_jobs.run_forever()
+        self.button.setText(text)
 
-for dep in dependency:
-  if dep not in modules:
-    install_dep(dep)
+      def setStatus(text):
+        setState("messages", getState("messages") + "\n" + text)
+      
+      def setCode():
+        setState("code", True)
+        setState("codeText", codebox.text())
+        codebox.setDisabled(True)
 
-sys.exit(launch_app())
+      container = QGridLayout(spacing=1)
+      container.setAlignment(Qt.AlignTop)
+
+      # messages label
+      self.message = QLabel("Messages:")
+      self.output = ScrollLabel()
+      self.output.setText(getState("messages"))
+
+      # control center
+      control = QHBoxLayout()
+      control.addWidget(QLabel("Delay Seconds:"))
+      ctrlbox = QLineEdit()
+      ctrlbox.move(20, 20)
+      ctrlbox.setText(getState("delay"))
+      control.addWidget(ctrlbox)
+      controlWidget = QWidget()
+      controlWidget.setLayout(control)
+
+      # code send center
+      code = QHBoxLayout()
+      codeText = QLabel("Enter code for:")
+      code.addWidget(codeText)
+      codebox = QLineEdit()
+      codebox.setDisabled(True)
+      codebox.move(20, 20)
+      codebox.returnPressed.connect(setCode)
+      code.addWidget(codebox)
+      codeWidget = QWidget()
+      codeWidget.setLayout(code)
+
+      self.button = QPushButton('Pause', self)
+      self.button.move(20,80)
+      self.button.clicked.connect(on_click)
+
+      # add widgets to container
+      container.addWidget(QLabel("MESSAGES"), 0, 0)
+      container.addWidget(self.output, 1, 0)
+      container.addWidget(QLabel(""), 2, 0)
+      container.addWidget(QLabel("CONTROL"), 3, 0)
+      container.addWidget(codeWidget, 4, 0, Qt.AlignRight)
+      container.addWidget(controlWidget, 4, 0, Qt.AlignLeft)
+      container.addWidget(self.button, 4, 2)
+
+      # create the engine to bind
+      widget = QWidget()
+      widget.setLayout(container)
+      self.setCentralWidget(widget)
+
+      def setOutput():
+        while True:
+          try: self.output.setText(getState("messages"))
+          except: pass
+      Thread(target=setOutput).start()
+      def setCodeText():
+        while True:
+          try: codebox.setDisabled(getState("code"))
+          except: pass
+      Thread(target=setCodeText).start()
+      def setDelay():
+        while True:
+          try: setState("delay", ctrlbox.text())
+          except: pass
+      Thread(target=setDelay).start()
+      # display the appropriate screen
+      self.show()
+
+class ScrollLabel(QScrollArea):
+  # constructor
+  def __init__(self, *args, **kwargs):
+    QScrollArea.__init__(self, *args, **kwargs)
+
+    # making widget resizable
+    self.setWidgetResizable(True)
+
+    self.setFixedWidth(500)
+    self.setFixedHeight(200)
+
+    # making qwidget object
+    content = QWidget(self)
+    self.setWidget(content)
+
+    # vertical box layout
+    lay = QVBoxLayout(content)
+
+    # creating label
+    self.label = QLabel(content)
+
+    # setting alignment to the text
+    self.label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+    # making label multi-line
+    self.label.setWordWrap(True)
+
+    # adding label to the layout
+    lay.addWidget(self.label)
+
+  # the setText method
+  def setText(self, text):
+    # setting text to the label
+    self.label.setText(text)
